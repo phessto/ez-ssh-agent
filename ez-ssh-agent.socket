@@ -1,0 +1,10 @@
+[Unit]
+Description=SSH Agent Socket
+
+[Socket]
+ListenStream=%t/ssh-agent.socket
+SocketMode=0600
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target
