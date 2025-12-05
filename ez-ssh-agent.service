@@ -1,0 +1,13 @@
+[Unit]
+Description=Persistent SSH Agent
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh-agent -D
+Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
+ExecStopPost=/bin/rm -f %t/ssh-agent.socket
+Restart=always
+
+[Install]
+WantedBy=default.target
+
