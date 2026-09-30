@@ -1,9 +1,9 @@
 [Unit]
 Description=Persistent SSH Agent
 # Long-lived user agent so password-locked keys can be unlocked once per boot.
-# On servers (no active graphical/login session), enable linger:
-#   loginctl enable-linger $USER
-# Install to ~/.config/systemd/user/ and: systemctl --user enable --now ez-ssh-agent.service
+# Run install-user-unit.sh before any ssh-add. It checks linger and warns
+# first: without linger the agent dies on logout and keys are lost; with
+# linger the agent and unlocked keys stay in memory until reboot.
 
 [Service]
 Type=simple
