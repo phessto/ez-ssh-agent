@@ -57,3 +57,7 @@ it for the current session only.
 
 One unlock per boot: agent socket under `$XDG_RUNTIME_DIR`, keys stay loaded
 until reboot (or until the service stops / linger is off and you log out).
+
+## License
+
+MIT License; see [LICENSE](LICENSE).
