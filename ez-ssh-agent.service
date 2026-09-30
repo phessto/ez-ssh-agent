@@ -1,13 +1,16 @@
 [Unit]
 Description=Persistent SSH Agent
+# Long-lived user agent so password-locked keys can be unlocked once per boot.
+# On servers (no active graphical/login session), enable linger:
+#   loginctl enable-linger $USER
+# Install to ~/.config/systemd/user/ and: systemctl --user enable --now ez-ssh-agent.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/ssh-agent -D
-Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
-ExecStopPost=/bin/rm -f %t/ssh-agent.socket
-Restart=always
+ExecStart=/usr/bin/ssh-agent -D -a %t/ssh-agent.socket
+Restart=on-failure
+RestartSec=1
+SuccessExitStatus=2
 
 [Install]
 WantedBy=default.target
-
