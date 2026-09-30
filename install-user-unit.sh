@@ -1,20 +1,9 @@
 #!/usr/bin/env bash
-# Documented install step for the long-lived user ssh-agent.
+# Install the long-lived user ssh-agent, warn about linger, then ssh-add.
 #
-# Run this instead of enabling the unit and running ssh-add by hand.
-# It always reports linger and prints what that means BEFORE any key
-# passphrase prompt:
-#
-#   1. Check linger with `loginctl show-user` and the linger-users list
-#      (/var/lib/systemd/linger — one file per user with linger on).
-#   2. Warn: without linger the agent dies on logout and unlocked keys
-#      are lost; with linger the agent and those keys stay in memory
-#      until reboot (anyone who can use the agent socket can use them).
-#   3. Only then install/enable the user unit and run ssh-add.
-#
-# This script does not enable or disable linger. To keep the agent
-# across logout, run `loginctl enable-linger` yourself (may need
-# polkit) and re-run this script, or press Enter after enabling it.
+# Always reports linger and prints a short warning BEFORE any key passphrase
+# prompt. Does not enable or disable linger — run `loginctl enable-linger`
+# yourself if you want the agent across logout.
 #
 # Files installed:
 #   ${XDG_CONFIG_HOME:-~/.config}/systemd/user/ez-ssh-agent.service
@@ -27,6 +16,7 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 user_name=${USER:-$(id -un)}
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 linger_users_dir=/var/lib/systemd/linger
+unit=ez-ssh-agent.service
 
 die() {
   printf 'install-user-unit: %s\n' "$*" >&2
@@ -78,32 +68,16 @@ print_linger_report() {
   local show_user=$1 users=$2 enabled=$3
   cat <<ENDWARN
 
-Linger status for ${user_name}:
-  loginctl show-user: ${show_user}
-  linger-users (${linger_users_dir}): ${users}
+Linger for ${user_name}: show-user=${show_user}; linger-users=${users} → ${enabled}
 
-WARNING — read this before any key passphrase
-----------------------------------------------
-Without linger:
-  Logging out stops your systemd user manager. This agent stops with
-  it, and keys you unlocked are wiped from memory. The next login needs
-  ssh-add (and the passphrases) again.
-
-With linger (loginctl enable-linger ${user_name}):
-  The user manager and this agent keep running after logout, until
-  reboot or until the service is stopped. Unlocked keys stay loaded
-  in the agent's memory across logouts.
-  Security implication: those keys remain usable by anything that can
-  reach the agent socket until reboot — not only while you are logged
-  in. Leave linger off on a shared or untrusted machine unless you
-  accept that.
-
-Either way, a reboot clears the agent. Linger is not turned on or off
-by this script.
-Current conclusion: linger is ${enabled}.
+WARNING — before any key passphrase:
+  No linger: logout stops the agent; unlocked keys are lost.
+  Linger (loginctl enable-linger ${user_name}): agent + unlocked keys stay
+  until reboot; anything that can reach the agent socket can use them.
+This script does not change linger. Reboot always clears the agent.
 ENDWARN
   if [[ $enabled != yes ]]; then
-    printf '\nTo enable it before unlocking keys:\n  loginctl enable-linger %s\n' "$user_name"
+    printf 'To enable linger before unlocking: loginctl enable-linger %s\n' "$user_name"
   fi
 }
 
@@ -115,6 +89,17 @@ confirm_before_passphrases() {
   else
     printf '\nNo terminal; continuing after the warning (stdin is not a TTY).\n' >&2
   fi
+}
+
+print_systemctl_usage() {
+  cat <<ENDUSAGE
+
+systemctl --user (after install):
+  systemctl --user status ${unit}
+  systemctl --user restart ${unit}   # clears loaded keys; ssh-add again
+  systemctl --user stop ${unit}
+  systemctl --user disable ${unit}
+ENDUSAGE
 }
 
 install_units() {
@@ -130,7 +115,10 @@ install_units() {
     "${config_home}/environment.d/ssh-agent.conf"
 
   systemctl --user daemon-reload
-  systemctl --user enable --now ez-ssh-agent.service
+  systemctl --user enable --now "$unit"
+  printf '\nEnabled and started %s:\n' "$unit"
+  systemctl --user --no-pager --full status "$unit" || true
+  print_systemctl_usage
 }
 
 wait_for_socket() {
@@ -140,7 +128,7 @@ wait_for_socket() {
     sleep 0.1
   done
   printf 'Agent socket did not appear at %s\n' "$sock" >&2
-  systemctl --user --no-pager --full status ez-ssh-agent.service >&2 || true
+  systemctl --user --no-pager --full status "$unit" >&2 || true
   return 1
 }
 
